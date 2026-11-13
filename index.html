@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>くるま実験ラボ｜サスペンション＆空力シミュレーター</title>
-<meta name="description" content="コンパクトハッチとクーペで、サスペンション・アライメント・空力パーツの組み合わせを3Dで試せる実験サイト">
+<meta name="description" content="マーチ NISMO S とスープラ RZ（JZA80）の諸元を参照し、サスペンション・アライメント・空力パーツの組み合わせを3Dで試せる実験サイト">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,8 +17,8 @@
   <section class="card stage">
     <div class="stage-head">
       <div class="seg" id="carSeg" role="group" aria-label="車種">
-        <button type="button" data-car="hatch">コンパクトハッチ</button>
-        <button type="button" data-car="coupe">クーペ</button>
+        <button type="button" data-car="hatch">マーチ NISMO S</button>
+        <button type="button" data-car="coupe">スープラ RZ（JZA80）</button>
       </div>
       <div class="speed-read"><span id="speedNum">80</span><small>km/h</small></div>
     </div>
@@ -124,7 +124,8 @@
       <li><b>コーナリング</b>：ロールセンター高さとロール剛性から4輪の荷重移動を求め、荷重とキャンバーで変わるタイヤの余力から旋回限界とアンダー／オーバーの傾向を出しています。</li>
       <li><b>空力</b>：Cd・Cl にパーツごとの増減を積み上げ、地上高（地面効果）、前傾角、ウイング角度と失速、横風の影響を加えています。</li>
       <li>気流の線と圧力分布の色は、車体の形から作った簡易表示です。風洞試験やCFDの結果ではありません。</li>
-      <li>車両・パーツの数値や価格は一般的な目安から決めた学習用の値です。実車のセッティングにそのまま使うことはできません。</li>
+      <li><b>車両データ</b>：寸法・重量・出力などは実車の公表諸元を参照しています。「車両・駆動」タブの表で「推定」としている項目（Cd値、重量配分、ばねレートなど）は公表値がないため目安で置いた値です。車体の形は寸法に合わせた簡易モデルで、実車のデザインを再現したものではありません。</li>
+      <li>パーツの効果量や価格は一般的な目安から決めた学習用の値です。実車のセッティングにそのまま使うことはできません。</li>
     </ul>
   </section>
 </main>

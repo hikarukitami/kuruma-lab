@@ -54,6 +54,7 @@ function buildControls() {
   const pv = $('p-vehicle');
   sel(pv, 'engine', 'エンジン', PT.engine); sel(pv, 'weight', '軽量化', PT.weight);
   sel(pv, 'wheel', 'ホイール', PT.wheel); sel(pv, 'tyre', 'タイヤ', PT.tyre);
+  pv.appendChild(mk('div', 'table-wrap', '<table id="specTbl"></table>'));
 
   const ps = $('p-sus');
   sel(ps, 'kit', 'サスペンションキット', PT.kit);
@@ -99,12 +100,18 @@ function applyKit(reset) {
     : single ? 'ばねレート・車高と、伸び縮み同時の減衰力（16段）を調整できます。'
     : 'ばねレート・車高と、伸び側／縮み側の減衰力を別々に調整できます。';
 }
+function drawSpec() {
+  const c = L.CARS[state.car];
+  $('specTbl').innerHTML = '<thead><tr><th>' + c.short + ' の参照諸元</th><th>値</th><th>出どころ</th></tr></thead><tbody>'
+    + c.spec.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + (r[2] ? '公表値' : '推定') + '</td></tr>').join('') + '</tbody>';
+}
 function syncAll() {
   const wing = state.rear === 'wingS' || state.rear === 'wingL';
   enable('wingAngle', wing); enable('gurney', state.rear !== 'none');
   enable('gLevel', state.mode !== 'straight');
   Object.keys(ctl).forEach(id => ctl[id].sync());
   document.querySelectorAll('#carSeg button').forEach(b => b.classList.toggle('on', b.dataset.car === state.car));
+  drawSpec();
   $('speedNum').textContent = state.speed;
 }
 
