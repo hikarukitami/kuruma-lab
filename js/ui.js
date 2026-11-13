@@ -3,7 +3,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const COL = { front: '#3987e5', drag: '#d95926', rear: '#199e70', y: '#c98500', road: '#8f8e84' };
-const KEY = 'kurumaLab.state.v2', SLOTS = 'kurumaLab.slots.v2';
+const KEY = 'kurumaLab.state.v3', SLOTS = 'kurumaLab.slots.v2';
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 保存できない環境では何もしない */ } }
@@ -129,7 +129,7 @@ function set(id, val) {
 function setCar(car) {
   const keep = {}; STAGE.forEach(k => { keep[k] = state[k]; });
   state = Object.assign(L.defaults(car), keep);
-  applyKit(true); sim.reset(); syncAll(); refresh(); store.set(KEY, state);
+  applyKit(false); sim.reset(); syncAll(); refresh(); store.set(KEY, state);
 }
 
 /* ---------- 数値タイル ---------- */
@@ -389,7 +389,8 @@ function init() {
     if (slots.length > 4) slots.shift();
     $('slotName').value = ''; store.set(SLOTS, slots); drawCompare();
   });
-  $('resetBtn').addEventListener('click', () => setCar(state.car));
+  $('resetBtn').addEventListener('click', () => { const keep = {}; STAGE.forEach(k => { keep[k] = state[k]; }); state = Object.assign(L.defaults(state.car, true), keep); applyKit(false); sim.reset(); syncAll(); refresh(); store.set(KEY, state); });
+  $('ownBtn').addEventListener('click', () => setCar(state.car));
   $('cmp').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.load != null) loadState(slots[+b.dataset.load].state);

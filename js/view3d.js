@@ -283,13 +283,13 @@ L.View = function (host, labelHost) {
       });
       const wm = halfW(c, xw - 0.15);
       g.add(box(xw - 0.24, xw - 0.1, c.belt + 0.03, c.belt + 0.13, sd * 0.9 * wm, sd * (0.9 * wm + 0.17), paintMat));   // ドアミラー
-      if (s.skirt) g.add(box(c.rearAxle + 0.42, fa - 0.42, FLOOR - 0.05, FLOOR + 0.03, sd * (W / 2 - 0.03), sd * (W / 2 + 0.05)));
+      if (s.skirt) g.add(box(c.rearAxle + 0.4, fa - 0.4, FLOOR - 0.035, FLOOR + 0.06, sd * W / 2 * 0.84, sd * W / 2 * 0.935, paintMat));
       if (s.canard) {
         const m = box(c.L - 0.5, c.L - 0.18, 0.4, 0.425, sd * (W / 2 - 0.14), sd * (W / 2 + 0.06)); m.rotation.z = -0.22; g.add(m);
         const m2 = box(c.L - 0.42, c.L - 0.16, 0.26, 0.285, sd * (W / 2 - 0.14), sd * (W / 2 + 0.04)); m2.rotation.z = -0.22; g.add(m2);
       }
     });
-    if (s.front === 'lip') g.add(box(c.L - 0.14, c.L + 0.05, FLOOR - 0.05, FLOOR + 0.01, -W * 0.4, W * 0.4));
+    if (s.front === 'lip') { const fh = floorAt(c, c.L - 0.14), fw = halfW(c, c.L - 0.14) * 0.84; g.add(box(c.L - 0.3, c.L - 0.03, fh - 0.035, fh + 0.02, -fw, fw, mat(c.color, { roughness: 0.32, metalness: 0.35 }))); }
     if (s.front === 'splitter') g.add(box(c.L - 0.3, c.L + 0.15, FLOOR - 0.04, FLOOR - 0.012, -W * 0.46, W * 0.46));
     if (s.duct) { const x = c.L - 0.85, h = P.Tf(x) + 0.09; g.add(box(x - 0.2, x + 0.2, h - 0.03, h + 0.012, -0.3, 0.3, mat(0x050607))); }
     if (s.tray) g.add(box(0.5, c.L - 0.35, FLOOR - 0.022, FLOOR - 0.004, -W * 0.42, W * 0.42, mat(0x8d949d)));
@@ -301,7 +301,7 @@ L.View = function (host, labelHost) {
       g.add(d);
     }
     wingGroup = null;
-    if (s.rear === 'spoiler') { const sp = c.spoiler; g.add(box(sp.x0, sp.x1, sp.h0, sp.h1, -sp.half, sp.half)); }
+    if (s.rear === 'spoiler') { const sp = c.spoiler; g.add(box(sp.x0, sp.x1, sp.h0, sp.h1, -sp.half, sp.half, mat(c.color, { roughness: 0.32, metalness: 0.35 }))); }
     if (s.rear === 'wingS' || s.rear === 'wingL') {
       const wp = L.PARTS.rear[s.rear], wg = c.wing;
       [-1, 1].forEach(sd => g.add(box(wg.x + 0.02, wg.x + 0.07, wg.base - 0.06, wg.h, sd * 0.3, sd * 0.33)));
@@ -319,13 +319,14 @@ L.View = function (host, labelHost) {
     springs.splice(0).forEach(w => scene.remove(w));
     bars.splice(0).forEach(w => scene.remove(w));
     const c = P.car, R = c.wheelR, rimCol = { stock: 0x8b9199, alloy: 0xc9ced6, forged: 0xd9b45a }[P.s.wheel];
-    const tyreMat = mat(0x141517, { roughness: 0.9 }), rimMat = mat(rimCol, { metalness: 0.6, roughness: 0.35 });
+    const tyreMat = mat(0x141517, { roughness: 0.9 });
+    const rimMats = [0, 1].map(i => mat(P.s.wheel === 'forged' || !c.rim ? rimCol : c.rim[i], { metalness: 0.6, roughness: 0.35 }));
     const hp = []; for (let i = 0; i <= 80; i++) { const a = i / 80 * Math.PI * 2 * 7; hp.push(Math.cos(a) * 0.055, i / 80, Math.sin(a) * 0.055); }
     const helix = new T.BufferGeometry(); helix.setAttribute('position', new T.Float32BufferAttribute(hp, 3));
     for (let i = 0; i < 4; i++) {
       const wg = new T.Group(), spin = new T.Group(); wg.add(spin); wg.spin = spin;
       const ty = new T.Mesh(new T.CylinderGeometry(R, R, c.tyreW, 28), tyreMat); ty.rotation.x = Math.PI / 2; spin.add(ty);
-      const rim = new T.Mesh(new T.CylinderGeometry(R * 0.66, R * 0.66, c.tyreW + 0.012, 24), rimMat); rim.rotation.x = Math.PI / 2; spin.add(rim);
+      const rim = new T.Mesh(new T.CylinderGeometry(R * 0.66, R * 0.66, c.tyreW + 0.012, 24), rimMats[i < 2 ? 0 : 1]); rim.rotation.x = Math.PI / 2; spin.add(rim);
       for (let k = 0; k < 5; k++) {
         const sp = new T.Mesh(new T.BoxGeometry(R * 1.2, 0.035, c.tyreW + 0.02), mat(0x2a2d32)); sp.rotation.z = k * Math.PI / 5; spin.add(sp);
       }

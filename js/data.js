@@ -11,10 +11,12 @@ L.CARS = {
     width: 1.69, tF: 1.47, tR: 1.475, cgH: 0.53, wheelR: 0.295, tyreW: 0.205, clear: 0.12,
     cd: 0.33, area: 2.07, clf: 0.08, clr: 0.11, cy: 2.2, cop: 0.45, power: 85,
     kF: 26, kR: 19, muF: 36, muR: 32, arbF: 10000, arbR: 4000, rcF: 0.06, rcR: 0.13,
-    camGainF: 0.25, camGainR: 0.1, belt: 0.97, rearH: 1.36, wakeLen: 1.7, wake: 1.3, color: 0x15171b, glass: 0x2b3746,
-    top: [[0, 0.95], [0.1, 1.36], [0.5, 1.495], [1.85, 1.495], [2.15, 1.45], [2.9, 1.0], [3.72, 0.86], [3.87, 0.6]],
-    spoiler: { x0: -0.2, x1: 0.12, h0: 1.35, h1: 1.4, half: 0.62 },
-    wing: { x: -0.04, h: 1.68, base: 1.4 },
+    camGainF: 0.25, camGainR: 0.1, belt: 0.97, rearH: 1.3, wakeLen: 1.7, wake: 1.3, color: 0x15171b, glass: 0x2b3746,
+    top: [[0, 0.98], [0.18, 1.3], [0.55, 1.47], [1.5, 1.495], [2.0, 1.47], [2.75, 1.03], [3.6, 0.9], [3.87, 0.62]],
+    rim: [0x3a3d42, 0x3a3d42],
+    preset: { front: 'lip', skirt: true, rear: 'spoiler', diff: 'small', kit: 'lower' },
+    spoiler: { x0: -0.14, x1: 0.2, h0: 1.3, h1: 1.345, half: 0.6 },
+    wing: { x: 0.02, h: 1.62, base: 1.34 },
     spec: [
       ['全長×全幅×全高', '3,870×1,690×1,495 mm', 1], ['ホイールベース', '2,450 mm', 1], ['車両重量', '1,010 kg', 1],
       ['最高出力', '85 kW（116 PS）', 1], ['最低地上高', '120 mm', 1], ['タイヤ', '205/45R16', 1],
@@ -30,8 +32,10 @@ L.CARS = {
     cd: 0.32, area: 1.89, clf: 0.05, clr: 0.07, cy: 1.8, cop: 0.40, power: 206,
     kF: 32, kR: 30, muF: 45, muR: 45, arbF: 16000, arbR: 9000, rcF: 0.04, rcR: 0.09,
     camGainF: 0.5, camGainR: 0.5, belt: 0.92, rearH: 0.9, wakeLen: 1.1, wake: 0.8, color: 0xf1f2f4, glass: 0x121a24,
-    top: [[0, 0.8], [0.45, 0.93], [0.7, 0.95], [1.6, 1.25], [2.2, 1.275], [2.55, 1.23], [3.15, 0.92], [4.3, 0.74], [4.52, 0.52]],
-    spoiler: { x0: -0.04, x1: 0.16, h0: 0.78, h1: 0.92, half: 0.74 },
+    top: [[0, 0.84], [0.3, 0.95], [0.7, 0.98], [1.6, 1.24], [2.2, 1.275], [2.6, 1.22], [3.2, 0.93], [4.25, 0.76], [4.52, 0.56]],
+    rim: [0xa8323a, 0x8b9199],
+    preset: { front: 'lip', skirt: true, rear: 'spoiler', kit: 'street', wheel: 'alloy' },
+    spoiler: { x0: -0.04, x1: 0.16, h0: 0.82, h1: 0.97, half: 0.74 },
     wing: { x: 0.12, h: 1.22, base: 0.84 },
     spec: [
       ['全長×全幅×全高', '4,520×1,810×1,275 mm', 1], ['ホイールベース', '2,550 mm', 1], ['トレッド 前／後', '1,520／1,525 mm', 1],
@@ -109,8 +113,8 @@ L.PARTS = {
   }
 };
 
-L.defaults = function (car) {
-  return {
+L.defaults = function (car, stock) {
+  const base = {
     car: car || 'hatch', speed: 80, wind: 0, road: 'bump', mode: 'straight', gLevel: 0.6, ex: 2,
     engine: 'stock', weight: 'none', wheel: 'stock', tyre: 'comfort',
     kit: 'stock', arbF: 'stock', arbR: 'stock',
@@ -120,6 +124,12 @@ L.defaults = function (car) {
     front: 'none', canard: false, duct: false, skirt: false,
     rear: 'none', wingAngle: 6, gurney: false, tray: false, diff: 'none'
   };
+  if (stock) return base;
+  // 車ごとの初期仕様（オーナー車の写真に合わせた装着パーツ）
+  const c = L.CARS[base.car], p = c.preset || {}, k = L.PARTS.kit[p.kit || 'stock'];
+  Object.assign(base, p);
+  base.kF = Math.round(c.kF * k.kMul[2]); base.kR = Math.round(c.kR * k.kMul[2]); base.hF = k.h[2]; base.hR = k.h[2];
+  return base;
 };
 
 L.topAt = function (c, x) {
