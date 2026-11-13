@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>くるま実験ラボ｜サスペンション＆空力シミュレーター</title>
+<meta name="description" content="コンパクトハッチとクーペで、サスペンションと空力パーツの組み合わせを速度ごとに試せる実験サイト">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>くるま実験ラボ</h1>
+    <p>パーツを組み合わせて、サスペンションと空力が速度でどう変わるかを試せます</p>
+  </div>
+</header>
+
+<main>
+  <section class="stage card">
+    <div class="stage-head">
+      <div class="seg" role="group" aria-label="車種">
+        <button type="button" data-car="hatch" class="on">コンパクトハッチ</button>
+        <button type="button" data-car="coupe">クーペ</button>
+      </div>
+      <div class="speed-read"><span id="speedNum">80</span><small>km/h</small></div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="scene" aria-label="走行中の車と気流のアニメーション"></canvas>
+    </div>
+    <p class="hint">気流の色：<i class="sw slow"></i>遅い　<i class="sw fast"></i>速い　／　路面と車体の上下動は見やすいように3倍に強調しています</p>
+
+    <div class="stage-ctl">
+      <label class="wide">速度
+        <input type="range" id="speed" min="0" max="250" step="5" value="80">
+      </label>
+      <label>路面
+        <select id="road">
+          <option value="bump">段差（ハンプ）</option>
+          <option value="wave">うねり</option>
+          <option value="rough">荒れた路面</option>
+          <option value="flat">フラット</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="showFlow" checked>気流</label>
+      <label class="chk"><input type="checkbox" id="showForce" checked>力の矢印</label>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>サスペンションパーツ</h2>
+      <label>スプリング
+        <select id="spring">
+          <option value="stock">純正スプリング</option>
+          <option value="sport">ダウンサス（少し硬い・-25mm）</option>
+          <option value="coil">車高調ハード（かなり硬い・-45mm）</option>
+        </select>
+      </label>
+      <label>ダンパー
+        <select id="damper">
+          <option value="stock">純正ダンパー</option>
+          <option value="sport">スポーツダンパー</option>
+          <option value="adj">減衰力調整式</option>
+        </select>
+      </label>
+      <label id="clicksRow" class="disabled">減衰力ダイヤル <b id="clicksVal">8</b>段 <small>（1=柔らかい／16=硬い）</small>
+        <input type="range" id="clicks" min="1" max="16" step="1" value="8" disabled>
+      </label>
+      <label>スタビライザー
+        <select id="stab">
+          <option value="stock">純正</option>
+          <option value="hard">強化スタビ</option>
+        </select>
+      </label>
+      <label>タイヤ
+        <select id="tyre">
+          <option value="comfort">コンフォートタイヤ</option>
+          <option value="sport">スポーツタイヤ</option>
+          <option value="semi">セミスリック</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>空力パーツ</h2>
+      <label>フロント
+        <select id="front">
+          <option value="none">なし</option>
+          <option value="lip">リップスポイラー</option>
+          <option value="splitter">フロントスプリッター</option>
+        </select>
+      </label>
+      <label>リア
+        <select id="rear">
+          <option value="none">なし</option>
+          <option value="spoiler">リアスポイラー</option>
+          <option value="wing">GTウイング</option>
+        </select>
+      </label>
+      <label id="wingRow" class="disabled">ウイング角度 <b id="wingVal">6</b>°
+        <input type="range" id="wingAngle" min="0" max="15" step="1" value="6" disabled>
+      </label>
+      <label class="chk block"><input type="checkbox" id="tray">フラットアンダーパネル</label>
+      <label class="chk block"><input type="checkbox" id="diff">リアディフューザー</label>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>サスペンション実験の結果</h2>
+      <div class="tiles">
+        <div class="tile"><span>固有振動数 前／後</span><b id="tFreq">–</b><small>Hz（高いほど硬い乗り味）</small></div>
+        <div class="tile"><span>減衰比 前／後</span><b id="tZeta">–</b><small>0.3前後が快適、0.5以上はスポーツ</small></div>
+        <div class="tile"><span>乗り心地（車体の揺れ）</span><b id="tRide">–</b><small>m/s²（小さいほど快適）</small></div>
+        <div class="tile"><span>接地荷重の変動</span><b id="tLoad">–</b><small>%（小さいほどタイヤが路面に付く）</small></div>
+        <div class="tile"><span>ロール角（0.8G旋回）</span><b id="tRoll">–</b><small>度</small></div>
+        <div class="tile"><span>空力による車高変化 前／後</span><b id="tSink">–</b><small>mm（−は沈み込み）</small></div>
+      </div>
+      <h3>車体と路面の上下動（直近4秒）</h3>
+      <div class="chart-wrap"><canvas id="chartSus"></canvas><div class="tip" id="tipSus"></div></div>
+      <div class="legend" id="legSus"></div>
+    </div>
+
+    <div class="card">
+      <h2>空力実験の結果</h2>
+      <div class="tiles">
+        <div class="tile"><span>空気抵抗係数 Cd</span><b id="tCd">–</b><small>小さいほど空気抵抗が少ない</small></div>
+        <div class="tile"><span>空気抵抗</span><b id="tDrag">–</b><small>N（現在の速度）</small></div>
+        <div class="tile"><span>ダウンフォース 前／後</span><b id="tDf">–</b><small>N（−は浮き上がる力）</small></div>
+        <div class="tile"><span>必要な出力</span><b id="tPow">–</b><small>kW（この速度を保つのに必要）</small></div>
+        <div class="tile"><span>最高速（計算値）</span><b id="tTop">–</b><small>km/h</small></div>
+        <div class="tile"><span>旋回限界</span><b id="tG">–</b><small>G（現在の速度）</small></div>
+      </div>
+      <h3>速度と空気の力</h3>
+      <div class="chart-wrap"><canvas id="chartAero"></canvas><div class="tip" id="tipAero"></div></div>
+      <div class="legend" id="legAero"></div>
+    </div>
+  </section>
+
+  <section class="card about">
+    <h2>このシミュレーターについて</h2>
+    <ul>
+      <li>サスペンションは前後それぞれを「車体・ばね・ダンパー・タイヤ」の2自由度モデル（クォーターカーモデル）で計算しています。速度が上がると同じ段差でも入力が速くなり、揺れ方が変わります。</li>
+      <li>空力は Cd（抵抗係数）と Cl（揚力係数）にパーツごとの増減を足し、速度の2乗に比例する力として計算しています。気流の線は雰囲気をつかむための簡易表示で、風洞試験やCFDの結果ではありません。</li>
+      <li>車両やパーツの数値は一般的な目安から決めた学習用の値です。実車のセッティングにそのまま使うことはできません。</li>
+    </ul>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
