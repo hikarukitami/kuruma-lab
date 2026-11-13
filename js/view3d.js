@@ -214,7 +214,8 @@ L.View = function (host, labelHost) {
     }
     [0, xs.length - 1].forEach(j => {             // 前後の端をふさぐ
       const sc = secs[j].pts, ci = verts.length; verts.push([xs[j], (sc[0][1] + sc[M - 1][1]) / 2, 0]);
-      for (let k = 0; k < R; k++) tri(ci, j * R + k, j * R + (k + 1) % R, 'paint');
+      for (let k = 0; k < R; k++) verts.push(verts[j * R + k].slice());     // 端面は別の頂点にして平らに見せる
+      for (let k = 0; k < R; k++) tri(ci, ci + 1 + k, ci + 1 + (k + 1) % R, 'paint');
     });
     const center = [c.L / 2, 0.6, 0];
     faces.forEach(f => {
@@ -267,7 +268,7 @@ L.View = function (host, labelHost) {
     const fa = c.rearAxle + c.wb, Tf = P.Tf, tailH = c.top[0][1];
     const lightF = new T.MeshBasicMaterial({ color: 0xfff1c4 }), lightR = new T.MeshBasicMaterial({ color: 0xff3b30 });
     const paintMat = mat(c.color, { roughness: 0.32, metalness: 0.35 }), wellMat = new T.MeshBasicMaterial({ color: 0x050607 });
-    const wf = halfW(c, c.L - 0.12), wt = halfW(c, 0.08), hl = Tf(c.L - 0.12);
+    const wf = halfW(c, c.L - 0.12), wt = halfW(c, 0), hl = Tf(c.L - 0.12);
     let xw = c.L; while (xw > 0 && Tf(xw) < c.belt + 0.08) xw -= 0.02;       // フロントガラスの付け根
     [c.rearAxle, fa].forEach(x => {                                          // ホイールハウスの内側
       const m = new T.Mesh(new T.CylinderGeometry(c.wheelR * 1.13, c.wheelR * 1.13, c.width * 0.93, 24), wellMat);
@@ -275,7 +276,7 @@ L.View = function (host, labelHost) {
     });
     [-1, 1].forEach(sd => {
       g.add(box(c.L - 0.2, c.L - 0.05, hl - 0.14, hl - 0.04, sd * 0.42 * wf, sd * 0.84 * wf, lightF));
-      g.add(box(0.035, 0.13, tailH - 0.17, tailH - 0.05, sd * 0.5 * wt, sd * 0.88 * wt, lightR));
+      g.add(box(-0.012, 0.06, tailH - 0.2, tailH - 0.07, sd * 0.42 * wt, sd * 0.8 * wt, lightR));
       [c.rearAxle, fa].forEach(x => {                         // フェンダーアーチ
         const m = new T.Mesh(new T.TorusGeometry(c.wheelR * 1.17, 0.03, 8, 28, Math.PI), paintMat);
         m.position.set(x - P.xcg, c.wheelR, -sd * (halfW(c, x) * 0.975)); g.add(m);
