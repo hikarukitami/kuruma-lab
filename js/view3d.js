@@ -11,19 +11,20 @@ L.View = function (host, labelHost) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   host.prepend(renderer.domElement);
   const scene = new T.Scene();
-  scene.background = new T.Color(0x0c0f14);
-  scene.fog = new T.Fog(0x0c0f14, 12, 26);
+  scene.background = new T.Color(0x141a22);
+  scene.fog = new T.Fog(0x141a22, 12, 26);
   const camera = new T.PerspectiveCamera(36, 2, 0.1, 80);
   const controls = new T.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.enablePan = false;
   controls.minDistance = 3.5; controls.maxDistance = 16; controls.maxPolarAngle = Math.PI / 2 - 0.03;
   controls.target.set(0, 0.55, 0);
   scene.add(new T.HemisphereLight(0xdfe8ff, 0x20242b, 1.5));
-  const sun = new T.DirectionalLight(0xffffff, 2.2); sun.position.set(4, 8, 5); scene.add(sun);
+  const sun = new T.DirectionalLight(0xffffff, 2.4); sun.position.set(4, 8, 5); scene.add(sun);
+  [[-6, 5, -4, 1.4], [6, 3, -6, 1.0], [-3, 4, 7, 0.9]].forEach(q => { const d = new T.DirectionalLight(0xdfe8ff, q[3]); d.position.set(q[0], q[1], q[2]); scene.add(d); });
 
   // 路面
   const groundGeo = new T.PlaneGeometry(44, 36, 176, 8); groundGeo.rotateX(-Math.PI / 2);
-  const ground = new T.Mesh(groundGeo, new T.MeshStandardMaterial({ color: 0x262a30, roughness: 1 }));
+  const ground = new T.Mesh(groundGeo, new T.MeshStandardMaterial({ color: 0x30353d, roughness: 1 }));
   scene.add(ground);
   const dashes = [];
   const dashGeo = new T.BoxGeometry(1.6, 0.02, 0.09), dashMat = new T.MeshBasicMaterial({ color: 0x59606a });
@@ -148,59 +149,93 @@ L.View = function (host, labelHost) {
   }
 
   /* ---------- 車体メッシュ ---------- */
-  function halfW(c, x) {
-    const u = Math.abs(x - c.L / 2) / (c.L / 2), e = Math.min(x, c.L - x);
-    return c.width / 2 * (1 - 0.2 * Math.pow(u, 4)) * (e < 0.3 ? 0.86 + 0.14 * Math.sqrt(Math.max(0, e) / 0.3) : 1);
+  const nA = 9, nB = 5, nC = 7, M = nA + nB + nC;
+  function profile(c) {                       // 屋根ラインをなめらかな曲線にする（行き過ぎない3次補間）
+    const p = c.top, n = p.length, d = [], m = [];
+    for (let i = 0; i < n - 1; i++) d.push((p[i + 1][1] - p[i][1]) / (p[i + 1][0] - p[i][0]));
+    for (let i = 0; i < n; i++) m.push(i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : 2 * d[i - 1] * d[i] / (d[i - 1] + d[i]));
+    return x => {
+      x = clamp(x, p[0][0], p[n - 1][0]);
+      let i = 0; while (i < n - 2 && x > p[i + 1][0]) i++;
+      const h = p[i + 1][0] - p[i][0], t = (x - p[i][0]) / h, t2 = t * t, t3 = t2 * t;
+      return (2 * t3 - 3 * t2 + 1) * p[i][1] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * p[i + 1][1] + (t3 - t2) * h * m[i + 1];
+    };
+  }
+  function halfW(c, x) {                      // 上から見た幅（前後の角を丸める）
+    const u = Math.abs(x - c.L / 2) / (c.L / 2), e = Math.max(0, Math.min(x, c.L - x));
+    return c.width / 2 * (1 - 0.14 * Math.pow(u, 3)) * (e < 0.5 ? 0.74 + 0.26 * Math.pow(Math.sin(Math.PI / 2 * e / 0.5), 0.55) : 1);
+  }
+  function floorAt(c, x) {
+    const e = Math.max(0, Math.min(x, c.L - x));
+    return FLOOR + (e < 0.4 ? 0.13 * Math.pow(1 - e / 0.4, 2) : 0);
+  }
+  // 断面：サイド(A)→ガラス面(B)→屋根(C) を曲線でつなぐ。返り値は右半分 [x, 高さ, 横] の点列
+  function section(c, Tf, x) {
+    const top = Tf(x), w = halfW(c, x), fl = floorAt(c, x);
+    const g = clamp((top - c.belt) / 0.4, 0, 1), sm = g * g * (3 - 2 * g), crown = lerp(0.1, 0.06, sm);
+    const hb = Math.max(fl + 0.05, Math.min(c.belt, top - crown)), ghB = Math.max(0, top - crown - hb);
+    const wr = lerp(0.955 * w, 0.7 * w, sm), pts = [];
+    for (let i = 0; i < nA; i++) { const t = i / (nA - 1); pts.push([x, fl + (hb - fl) * t, w * (1 - 0.12 * Math.pow(1 - t, 3) - 0.03 * t * t)]); }
+    for (let i = 0; i < nB; i++) { const t = (i + 1) / nB; pts.push([x, hb + ghB * t, lerp(0.97 * w, wr, Math.pow(t, 0.7))]); }
+    for (let i = 0; i < nC; i++) { const th = (i + 1) / nC * Math.PI / 2; pts.push([x, hb + ghB + crown * Math.pow(Math.sin(th), 0.8), i === nC - 1 ? 0 : wr * Math.pow(Math.cos(th), 0.5)]); }
+    return { pts, ghB, sm };
   }
   function buildBody() {
-    const c = P.car, set = new Set();
-    const add = x => set.add(Math.round(clamp(x, 0, c.L) * 1000) / 1000);
-    for (let x = 0; x <= c.L + 1e-6; x += 0.12) add(x);
-    c.top.forEach((p, i) => {
-      add(p[0]);
-      if (i && (p[1] - c.belt) * (c.top[i - 1][1] - c.belt) < 0) {
-        const q = c.top[i - 1]; add(q[0] + (c.belt - q[1]) / (p[1] - q[1]) * (p[0] - q[0]));
-      }
+    const c = P.car, Tf = profile(c), R = 2 * M - 1, xs = [];
+    const ns = Math.round(c.L / 0.05);
+    for (let j = 0; j <= ns; j++) xs.push(c.L * j / ns);
+    const secs = xs.map(x => section(c, Tf, x)), verts = [];
+    secs.forEach(sc => {
+      for (let k = 0; k < R; k++) { const q = sc.pts[k < M ? k : 2 * M - 2 - k], sgn = k < M ? 1 : -1; verts.push([q[0], q[1], sgn * q[2]]); }
     });
-    const xs = Array.from(set).sort((a, b) => a - b);
+    const flat = xs.filter((x, j) => secs[j].sm > 0.9 && Math.abs(Tf(x + 0.03) - Tf(x - 0.03)) / 0.06 < 0.3);
+    const xB = flat.length ? (flat[0] + flat[flat.length - 1]) / 2 - 0.1 : -9;
+    const axles = [c.rearAxle, c.rearAxle + c.wb], idx = [];
     faces = [];
-    const quad = (a, b, cc, d, kind) => faces.push({ p: [a, b, cc, d], kind });
-    let prevL = null, prevG = null, prevTop = 0;
-    xs.forEach((x, j) => {
-      const top = L.topAt(c, x), w = halfW(c, x), ht = Math.min(top, c.belt), r = Math.min(0.1, (ht - FLOOR) * 0.4);
-      const ring = [[x, FLOOR, -w], [x, ht - r, -w], [x, ht, -w + r], [x, ht, w - r], [x, ht - r, w], [x, FLOOR, w]];
-      const gh = Math.max(0, top - c.belt), wb = w - 0.04, wr = wb - 0.32 * gh;
-      const gr = [[x, c.belt, -wb], [x, c.belt + gh, -wr], [x, c.belt + gh, wr], [x, c.belt, wb]];
-      if (prevL) {
-        for (let i = 0; i < 5; i++) quad(prevL[i], prevL[i + 1], ring[i + 1], ring[i], 'paint');
-        quad(prevL[5], prevL[0], ring[0], ring[5], 'floor');
-        if (gh > 0.001 || prevG.gh > 0.001) {
-          const steep = Math.abs(top - prevTop) / (x - xs[j - 1]) > 0.3;
-          quad(prevG.r[0], prevG.r[1], gr[1], gr[0], 'glass');
-          quad(prevG.r[1], prevG.r[2], gr[2], gr[1], steep ? 'glass' : 'paint');
-          quad(prevG.r[2], prevG.r[3], gr[3], gr[2], 'glass');
+    const tri = (a, b, cc, kind) => { idx.push(a, b, cc); faces.push({ v: [a, b, cc], kind }); };
+    for (let j = 0; j < xs.length - 1; j++) {
+      const xm = (xs[j] + xs[j + 1]) / 2, slope = Math.abs(Tf(xs[j + 1]) - Tf(xs[j])) / (xs[j + 1] - xs[j]);
+      const gh = (secs[j].ghB + secs[j + 1].ghB) / 2;
+      for (let k = 0; k < R; k++) {
+        const k2 = (k + 1) % R, a = j * R + k, b = j * R + k2, d = (j + 1) * R + k, e = (j + 1) * R + k2;
+        let kind = 'paint';
+        if (k === R - 1) kind = 'floor';
+        else {
+          const ci = k < M - 1 ? k : 2 * M - 3 - k;
+          if (ci <= nA - 2) {
+            const hm = (verts[a][1] + verts[b][1]) / 2;
+            if (axles.some(xa => Math.pow(xm - xa, 2) + Math.pow(hm - c.wheelR, 2) < Math.pow(1.15 * c.wheelR, 2))) continue;   // ホイールハウスの穴
+          } else if (ci <= nA + nB - 2) {
+            if (gh > 0.2 && ci - (nA - 1) <= nB - 2 && Math.abs(xm - xB) > 0.035) kind = 'glass';
+          } else if (slope > 0.3 && gh > 0.1 && ci - (nA - 1 + nB) >= 1) kind = 'glass';
         }
-      } else { quad(ring[0], ring[1], ring[4], ring[5], 'paint'); quad(ring[1], ring[2], ring[3], ring[4], 'paint'); }
-      if (j === xs.length - 1) { quad(ring[0], ring[1], ring[4], ring[5], 'paint'); quad(ring[1], ring[2], ring[3], ring[4], 'paint'); }
-      prevL = ring; prevG = { r: gr, gh }; prevTop = top;
+        tri(a, b, e, kind); tri(a, e, d, kind);
+      }
+    }
+    [0, xs.length - 1].forEach(j => {             // 前後の端をふさぐ
+      const sc = secs[j].pts, ci = verts.length; verts.push([xs[j], (sc[0][1] + sc[M - 1][1]) / 2, 0]);
+      for (let k = 0; k < R; k++) tri(ci, j * R + k, j * R + (k + 1) % R, 'paint');
     });
-    const pos = new Float32Array(faces.length * 18), center = [c.L / 2, 0.6, 0];
-    faces.forEach((f, k) => {
-      const [a, b, cc, d] = f.p, order = [a, b, cc, a, cc, d];
-      order.forEach((p, i) => { pos[k * 18 + i * 3] = p[0] - P.xcg; pos[k * 18 + i * 3 + 1] = p[1]; pos[k * 18 + i * 3 + 2] = -p[2]; });
-      const u = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]], v = [d[0] - b[0], d[1] - b[1], d[2] - b[2]];
+    const center = [c.L / 2, 0.6, 0];
+    faces.forEach(f => {
+      const a = verts[f.v[0]], b = verts[f.v[1]], cc = verts[f.v[2]];
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [cc[0] - a[0], cc[1] - a[1], cc[2] - a[2]];
       let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
       const len = Math.hypot(n[0], n[1], n[2]) || 1; n = n.map(q => q / len);
-      const mid = [0, 1, 2].map(i => (a[i] + b[i] + cc[i] + d[i]) / 4);
+      const mid = [0, 1, 2].map(i => (a[i] + b[i] + cc[i]) / 3);
       if (n[0] * (mid[0] - center[0]) + n[1] * (mid[1] - center[1]) + n[2] * (mid[2] - center[2]) < 0) n = n.map(q => -q);
       f.n = n; f.x = mid[0];
     });
-    const g = new T.BufferGeometry();
-    g.setAttribute('position', new T.BufferAttribute(pos, 3));
-    g.setAttribute('color', new T.BufferAttribute(new Float32Array(faces.length * 18), 3));
+    const pos = new Float32Array(verts.length * 3);
+    verts.forEach((q, i) => { pos[i * 3] = q[0] - P.xcg; pos[i * 3 + 1] = q[1]; pos[i * 3 + 2] = -q[2]; });
+    let g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setIndex(idx);
     g.computeVertexNormals();
-    bodyMesh = new T.Mesh(g, new T.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.45, metalness: 0.15, side: T.DoubleSide }));
+    g = g.toNonIndexed();                         // 法線はなめらかなまま、色だけ面ごとに塗れるようにする
+    g.setAttribute('color', new T.BufferAttribute(new Float32Array(faces.length * 9), 3));
+    bodyMesh = new T.Mesh(g, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.35, side: T.DoubleSide }));
     bodyGroup.add(bodyMesh);
+    P.Tf = Tf;
   }
   function cpOf(f) {
     const r = flow.ratio(f.x), q = r * r - 1, fx = f.n[0];
@@ -217,10 +252,10 @@ L.View = function (host, labelHost) {
       if (mode === 'press') {
         const cp = cpOf(f), t = clamp(Math.abs(cp) / (cp < 0 ? 1.2 : 1), 0, 1), o = cp < 0 ? neg : posC;
         col.setRGB(lerp(zero[0], o[0], t), lerp(zero[1], o[1], t), lerp(zero[2], o[2], t));
-      } else if (f.kind === 'glass') col.setHex(0x121a24);
+      } else if (f.kind === 'glass') col.setHex(P.car.glass);
       else if (f.kind === 'floor') col.setHex(0x0e0f11);
       else col.copy(paint);
-      for (let i = 0; i < 6; i++) { arr[k * 18 + i * 3] = col.r; arr[k * 18 + i * 3 + 1] = col.g; arr[k * 18 + i * 3 + 2] = col.b; }
+      for (let i = 0; i < 3; i++) { arr[k * 9 + i * 3] = col.r; arr[k * 9 + i * 3 + 1] = col.g; arr[k * 9 + i * 3 + 2] = col.b; }
     });
     bodyMesh.geometry.attributes.color.needsUpdate = true;
     bodyMesh.material.transparent = xray; bodyMesh.material.opacity = xray ? 0.22 : 1; bodyMesh.material.depthWrite = !xray;
@@ -229,15 +264,24 @@ L.View = function (host, labelHost) {
 
   function buildParts() {
     const c = P.car, s = P.s, W = c.width, g = new T.Group();
-    const fa = c.rearAxle + c.wb, noseH = c.top[c.top.length - 1][1], tailH = c.top[0][1];
-    const lightF = new T.MeshBasicMaterial({ color: 0xffe9a8 }), lightR = new T.MeshBasicMaterial({ color: 0xff4a3d });
+    const fa = c.rearAxle + c.wb, Tf = P.Tf, tailH = c.top[0][1];
+    const lightF = new T.MeshBasicMaterial({ color: 0xfff1c4 }), lightR = new T.MeshBasicMaterial({ color: 0xff3b30 });
+    const paintMat = mat(c.color, { roughness: 0.32, metalness: 0.35 }), wellMat = new T.MeshBasicMaterial({ color: 0x050607 });
+    const wf = halfW(c, c.L - 0.12), wt = halfW(c, 0.08), hl = Tf(c.L - 0.12);
+    let xw = c.L; while (xw > 0 && Tf(xw) < c.belt + 0.08) xw -= 0.02;       // フロントガラスの付け根
+    [c.rearAxle, fa].forEach(x => {                                          // ホイールハウスの内側
+      const m = new T.Mesh(new T.CylinderGeometry(c.wheelR * 1.13, c.wheelR * 1.13, c.width * 0.93, 24), wellMat);
+      m.rotation.x = Math.PI / 2; m.position.set(x - P.xcg, c.wheelR, 0); g.add(m);
+    });
     [-1, 1].forEach(sd => {
-      g.add(box(c.L - 0.12, c.L - 0.01, noseH, noseH + 0.1, sd * 0.38, sd * 0.68, lightF));
-      g.add(box(0, 0.05, tailH - 0.16, tailH - 0.04, sd * 0.4, sd * 0.72, lightR));
-      [c.rearAxle, fa].forEach(x => {                         // ホイールアーチ
-        const m = new T.Mesh(new T.CircleGeometry(c.wheelR * 1.2, 28), new T.MeshBasicMaterial({ color: 0x08090a, side: T.DoubleSide }));
-        m.position.set(x - P.xcg, c.wheelR + 0.02, -sd * (halfW(c, x) + 0.004)); g.add(m);
+      g.add(box(c.L - 0.2, c.L - 0.05, hl - 0.14, hl - 0.04, sd * 0.42 * wf, sd * 0.84 * wf, lightF));
+      g.add(box(0.035, 0.13, tailH - 0.17, tailH - 0.05, sd * 0.5 * wt, sd * 0.88 * wt, lightR));
+      [c.rearAxle, fa].forEach(x => {                         // フェンダーアーチ
+        const m = new T.Mesh(new T.TorusGeometry(c.wheelR * 1.17, 0.03, 8, 28, Math.PI), paintMat);
+        m.position.set(x - P.xcg, c.wheelR, -sd * (halfW(c, x) * 0.975)); g.add(m);
       });
+      const wm = halfW(c, xw - 0.15);
+      g.add(box(xw - 0.24, xw - 0.1, c.belt + 0.03, c.belt + 0.13, sd * 0.9 * wm, sd * (0.9 * wm + 0.17), paintMat));   // ドアミラー
       if (s.skirt) g.add(box(c.rearAxle + 0.42, fa - 0.42, FLOOR - 0.05, FLOOR + 0.03, sd * (W / 2 - 0.03), sd * (W / 2 + 0.05)));
       if (s.canard) {
         const m = box(c.L - 0.5, c.L - 0.18, 0.4, 0.425, sd * (W / 2 - 0.14), sd * (W / 2 + 0.06)); m.rotation.z = -0.22; g.add(m);
@@ -246,7 +290,7 @@ L.View = function (host, labelHost) {
     });
     if (s.front === 'lip') g.add(box(c.L - 0.14, c.L + 0.05, FLOOR - 0.05, FLOOR + 0.01, -W * 0.4, W * 0.4));
     if (s.front === 'splitter') g.add(box(c.L - 0.3, c.L + 0.15, FLOOR - 0.04, FLOOR - 0.012, -W * 0.46, W * 0.46));
-    if (s.duct) { const x = c.L - 0.85, h = L.topAt(c, x); g.add(box(x - 0.2, x + 0.2, h - 0.03, h + 0.012, -0.3, 0.3, mat(0x050607))); }
+    if (s.duct) { const x = c.L - 0.85, h = P.Tf(x) + 0.09; g.add(box(x - 0.2, x + 0.2, h - 0.03, h + 0.012, -0.3, 0.3, mat(0x050607))); }
     if (s.tray) g.add(box(0.5, c.L - 0.35, FLOOR - 0.022, FLOOR - 0.004, -W * 0.42, W * 0.42, mat(0x8d949d)));
     if (s.diff !== 'none') {
       const big = s.diff === 'large', len = big ? 0.75 : 0.5, ang = big ? 0.26 : 0.17;
