@@ -80,6 +80,11 @@ function buildControls() {
   sel(pe, 'diff', 'ディフューザー', PT.diff);
   g = mk('div', 'cols2'); pe.appendChild(g);
   ['tray', 'skirt', 'canard', 'duct', 'gurney'].forEach(f => chk(g, f, PT.flags[f].label));
+
+  const pb = $('p-brace');
+  pb.appendChild(mk('p', 'sub', 'ボディのねじれと、足まわり取付部のたわみを減らすパーツです。足まわりを固めるほど効果が大きくなります。位置は「透視」表示で見られます。'));
+  Object.keys(PT.brace).forEach(k => chk(pb, k, PT.brace[k].label));
+  sel(pb, 'cage', 'ロールバー／ロールケージ', PT.cage);
 }
 
 function applyKit(reset) {
@@ -145,6 +150,9 @@ const TILES = [
   ['r-corner', 'rollg', 'ロール率', '度/G。小さいほどロールしない'],
   ['r-corner', 'rolld', 'ロール剛性配分（前）', '%。大きいほどアンダー傾向'],
   ['r-corner', 'cam', '旋回中の対地キャンバー 前／後', '度。外輪。−1°付近が最良'],
+  ['r-corner', 'ktors', 'ボディねじり剛性', 'Nm/度。補強で上がる'],
+  ['r-corner', 'twist', '旋回中のボディねじれ', '度。限界付近。小さいほど狙い通りに動く'],
+  ['r-corner', 'ltd', '荷重移動配分（前）', '%。実際に前輪が受け持つ割合'],
   ['r-corner', 'rollnow', '今のロール角／ピッチ角', '度'],
   ['r-aero', 'cd', '空気抵抗係数 Cd', '小さいほど抵抗が少ない'],
   ['r-aero', 'drag', '空気抵抗', 'N。現在の速度'],
@@ -178,7 +186,7 @@ function metrics(Px, Hx, topx) {
   return {
     mass: Math.round(Px.mass), power: Math.round(Px.power), cd: ae.cd.toFixed(3), top: Math.round(topx),
     df: Math.round(dfT), maxG: Hx.maxG.toFixed(2), bal: balanceText(Hx.balance), rollg: Hx.rollGrad.toFixed(2),
-    freq: Px.freqF.toFixed(2) + ' / ' + Px.freqR.toFixed(2), price: Px.price
+    freq: Px.freqF.toFixed(2) + ' / ' + Px.freqR.toFixed(2), price: Px.price, ktors: Math.round(Px.kTors / 100) * 100
   };
 }
 function tilesStatic() {
@@ -189,6 +197,7 @@ function tilesStatic() {
   T('maxG', H.maxG.toFixed(2)); T('bal', balanceText(H.balance));
   T('rollg', H.rollGrad.toFixed(2)); T('rolld', H.rollDist.toFixed(0));
   T('cam', sgn(H.outF, 1) + ' / ' + sgn(H.outR, 1));
+  T('ktors', Math.round(P.kTors / 100) * 100); T('twist', Math.abs(H.twist).toFixed(3)); T('ltd', H.ltDist.toFixed(1));
   T('cd', ae.cd.toFixed(3)); T('drag', Math.round(ae.drag));
   T('df', sgn(Math.round(-ae.liftF)) + ' / ' + sgn(Math.round(-ae.liftR)));
   const dfT = -(ae.liftF + ae.liftR);
@@ -245,7 +254,8 @@ function drawChart1() {
     } else if (type === 'angles') {
       cfg = Object.assign(base, { zero: true, minSpan: 2, unit: '度', vfmt: y => sgn(y, 2) + '°', series: [
         { name: 'ロール角（＋で右に傾く）', color: COL.front, pts: tr.map(p => [p.t, p.roll]) },
-        { name: 'ピッチ角（＋で前上がり）', color: COL.drag, pts: tr.map(p => [p.t, p.pitch]) }] });
+        { name: 'ピッチ角（＋で前上がり）', color: COL.drag, pts: tr.map(p => [p.t, p.pitch]) },
+        { name: 'ボディねじれ×10', color: COL.rear, pts: tr.map(p => [p.t, p.twist * 10]) }] });
       $('note1').textContent = '旋回でロール、加減速でピッチが出ます。スタビやばねで変わります。';
     } else {
       const nm = ['左前', '右前', '左後', '右後'], cl = [COL.front, COL.drag, COL.rear, COL.y];
@@ -299,12 +309,12 @@ function drawChart2() {
 }
 
 /* ---------- 保存と比較 ---------- */
-const ROWS = [['mass', '車重 (kg)'], ['power', '出力 (kW)'], ['freq', '固有振動数 前/後 (Hz)'], ['rollg', 'ロール率 (度/G)'], ['maxG', '旋回限界 (G)'],
+const ROWS = [['mass', '車重 (kg)'], ['power', '出力 (kW)'], ['freq', '固有振動数 前/後 (Hz)'], ['rollg', 'ロール率 (度/G)'], ['ktors', 'ボディねじり剛性 (Nm/度)'], ['maxG', '旋回限界 (G)'],
   ['bal', 'ハンドリング傾向'], ['cd', 'Cd'], ['df', 'ダウンフォース合計 (N)'], ['top', '最高速 (km/h)'], ['price', 'パーツ代 (万円)']];
 function drawCompare() {
   const v = state.speed / 3.6;
   const cols = [{ name: '現在', m: metrics(P, H, top) }].concat(slots.map(s => {
-    const st = Object.assign({}, s.state), Px = L.build(st);
+    const st = Object.assign(L.defaults(s.state.car, true), s.state), Px = L.build(st);
     return { name: s.name + '（' + L.CARS[st.car].name + '）', m: metrics(Px, L.handling(Px, v, state.wind), L.topSpeed(Px)) };
   }));
   let h = '<thead><tr><th>' + state.speed + ' km/h での値</th>' + cols.map(c => '<th>' + c.name.replace(/</g, '&lt;') + '</th>').join('') + '</tr></thead><tbody>';

@@ -11,7 +11,7 @@ L.CARS = {
     width: 1.69, tF: 1.47, tR: 1.475, cgH: 0.53, wheelR: 0.295, tyreW: 0.205, clear: 0.12,
     cd: 0.33, area: 2.07, clf: 0.08, clr: 0.11, cy: 2.2, cop: 0.45, power: 85,
     kF: 26, kR: 19, muF: 36, muR: 32, arbF: 10000, arbR: 4000, rcF: 0.06, rcR: 0.13,
-    camGainF: 0.25, camGainR: 0.1, belt: 0.97, rearH: 1.3, wakeLen: 1.7, wake: 1.3, color: 0x15171b, glass: 0x2b3746,
+    camGainF: 0.25, camGainR: 0.1, kTors: 11000, compF: 0.45, compR: 0.35, belt: 0.97, rearH: 1.3, wakeLen: 1.7, wake: 1.3, color: 0x15171b, glass: 0x2b3746,
     top: [[0, 0.98], [0.18, 1.3], [0.55, 1.47], [1.5, 1.495], [2.0, 1.47], [2.75, 1.03], [3.6, 0.9], [3.87, 0.62]],
     rim: [0x3a3d42, 0x3a3d42],
     preset: { front: 'lip', skirt: true, rear: 'spoiler', diff: 'small', kit: 'lower' },
@@ -22,7 +22,7 @@ L.CARS = {
       ['最高出力', '85 kW（116 PS）', 1], ['最低地上高', '120 mm', 1], ['タイヤ', '205/45R16', 1],
       ['サスペンション 前／後', 'ストラット／トーションビーム', 1], ['駆動方式', 'FF・5MT', 1],
       ['トレッド 前／後', '1,470／1,475 mm', 0], ['前後重量配分', '63：37', 0], ['Cd値', '0.33', 0],
-      ['ばねレート 前／後（ホイール位置）', '26／19 N/mm', 0], ['重心高', '530 mm', 0]
+      ['ばねレート 前／後（ホイール位置）', '26／19 N/mm', 0], ['重心高', '530 mm', 0], ['ボディねじり剛性', '11,000 Nm/度', 0]
     ]
   },
   // トヨタ スープラ RZ（JZA80・2JZ-GTE）の公表諸元を参照
@@ -31,7 +31,7 @@ L.CARS = {
     width: 1.81, tF: 1.52, tR: 1.525, cgH: 0.48, wheelR: 0.32, tyreW: 0.245, clear: 0.13,
     cd: 0.32, area: 1.89, clf: 0.05, clr: 0.07, cy: 1.8, cop: 0.40, power: 206,
     kF: 32, kR: 30, muF: 45, muR: 45, arbF: 16000, arbR: 9000, rcF: 0.04, rcR: 0.09,
-    camGainF: 0.5, camGainR: 0.5, belt: 0.92, rearH: 0.9, wakeLen: 1.1, wake: 0.8, color: 0xf1f2f4, glass: 0x121a24,
+    camGainF: 0.5, camGainR: 0.5, kTors: 13000, compF: 0.3, compR: 0.3, belt: 0.92, rearH: 0.9, wakeLen: 1.1, wake: 0.8, color: 0xf1f2f4, glass: 0x121a24,
     top: [[0, 0.84], [0.3, 0.95], [0.7, 0.98], [1.6, 1.24], [2.2, 1.275], [2.6, 1.22], [3.2, 0.93], [4.25, 0.76], [4.52, 0.56]],
     rim: [0xa8323a, 0x8b9199],
     preset: { front: 'lip', skirt: true, rear: 'spoiler', kit: 'street', wheel: 'alloy' },
@@ -42,7 +42,7 @@ L.CARS = {
       ['車両重量', '1,510 kg', 1], ['最高出力', '206 kW（280 PS）', 1], ['駆動方式', 'FR', 1],
       ['タイヤ 前／後', '235/45R17／255/40R17', 0], ['サスペンション 前／後', 'ダブルウィッシュボーン', 0],
       ['最低地上高', '130 mm', 0], ['前後重量配分', '53：47', 0], ['Cd値', '0.32', 0],
-      ['ばねレート 前／後（ホイール位置）', '32／30 N/mm', 0], ['重心高', '480 mm', 0]
+      ['ばねレート 前／後（ホイール位置）', '32／30 N/mm', 0], ['重心高', '480 mm', 0], ['ボディねじり剛性', '13,000 Nm/度', 0]
     ]
   }
 };
@@ -104,6 +104,22 @@ L.PARTS = {
     small: { label: 'ディフューザー（小）', mass: 3, price: 6 },
     large: { label: 'ディフューザー（大・フィン付き）', mass: 7, price: 18 }
   },
+  // ボディ補強。kc: ねじり剛性の上乗せ割合、cf/cr: 前後の取付部のたわみ（旋回中のキャンバー変化）を減らす割合
+  brace: {
+    bTowerF: { label: 'フロント ストラットタワーバー', kc: 0.04, cf: 0.30, mass: 2, price: 2 },
+    bTowerR: { label: 'リア タワーバー／ピラーバー', kc: 0.05, cr: 0.20, mass: 2, price: 2 },
+    bLowerF: { label: 'フロント ロアアームバー', kc: 0.02, cf: 0.20, mass: 3, price: 2 },
+    bLowerR: { label: 'リア ロアアームバー／メンバーブレース', kc: 0.02, cr: 0.20, mass: 3, price: 2 },
+    bFloor:  { label: 'フロアバー／センターブレース', kc: 0.10, mass: 4, price: 3 },
+    bFender: { label: 'フェンダーブレース', kc: 0.06, cf: 0.10, mass: 3, price: 4 },
+    bSpot:   { label: 'スポット増し', kc: 0.20, mass: 0, price: 30 }
+  },
+  cage: {
+    none: { label: 'なし', kc: 0 },
+    p4:   { label: '4点式ロールバー', kc: 0.25, mass: 18, price: 12, dcg: 0.003 },
+    p6:   { label: '6点式ロールバー', kc: 0.45, mass: 28, price: 18, dcg: 0.005 },
+    full: { label: 'フルロールケージ（溶接）', kc: 0.80, mass: 45, price: 50, dcg: 0.008 }
+  },
   flags: {
     canard: { label: 'カナード', mass: 1, price: 3 },
     duct:   { label: 'ボンネットダクト', mass: -1, price: 8 },
@@ -122,7 +138,8 @@ L.defaults = function (car, stock) {
     bumpF: 8, rebF: 8, bumpR: 8, rebR: 8,
     camF: -0.5, camR: -1.0, toeF: 0, toeR: 0.1,
     front: 'none', canard: false, duct: false, skirt: false,
-    rear: 'none', wingAngle: 6, gurney: false, tray: false, diff: 'none'
+    rear: 'none', wingAngle: 6, gurney: false, tray: false, diff: 'none',
+    bTowerF: false, bTowerR: false, bLowerF: false, bLowerR: false, bFloor: false, bFender: false, bSpot: false, cage: 'none'
   };
   if (stock) return base;
   // 車ごとの初期仕様（オーナー車の写真に合わせた装着パーツ）

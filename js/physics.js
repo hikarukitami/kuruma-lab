@@ -10,6 +10,12 @@ L.build = function (s) {
   const eng = PT.engine[s.engine], wt = PT.weight[s.weight], wh = PT.wheel[s.wheel], ty = PT.tyre[s.tyre], kit = PT.kit[s.kit];
   const list = [eng, wt, wh, ty, kit, PT.arbF[s.arbF], PT.arbR[s.arbR], PT.front[s.front], PT.rear[s.rear], PT.diff[s.diff]];
   ['canard', 'duct', 'skirt', 'gurney', 'tray'].forEach(f => { if (s[f]) list.push(PT.flags[f]); });
+  const cage = PT.cage[s.cage] || PT.cage.none; list.push(cage);
+  let kcMul = 1 + cage.kc, compF = c.compF, compR = c.compR;
+  Object.keys(PT.brace).forEach(k => {
+    if (!s[k]) return; const b = PT.brace[k]; list.push(b);
+    kcMul += b.kc; compF *= 1 - (b.cf || 0); compR *= 1 - (b.cr || 0);
+  });
   let mass = c.mass + 70 + 4 * wh.du, price = 0;           // 70kg はドライバー
   list.forEach(p => { mass += p.mass || 0; price += p.price || 0; });
 
@@ -21,7 +27,7 @@ L.build = function (s) {
   const cBF = c0F * kit.dBase * clickMul(s.bumpF) * 0.7, cRF = c0F * kit.dBase * clickMul(s.rebF) * 1.3;
   const cBR = c0R * kit.dBase * clickMul(s.bumpR) * 0.7, cRR = c0R * kit.dBase * clickMul(s.rebR) * 1.3;
   const arbF = c.arbF * PT.arbF[s.arbF].mul, arbR = c.arbR * PT.arbR[s.arbR].mul;
-  const cg = c.cgH + hF * c.fr + hR * (1 - c.fr) + (wt.dcg || 0), cgS = cg + 0.03;
+  const cg = c.cgH + hF * c.fr + hR * (1 - c.fr) + (wt.dcg || 0) + (cage.dcg || 0), cgS = cg + 0.03;
   const rcF = c.rcF + hF * 1.2, rcR = c.rcR + hR * 1.1;    // 車高を下げるとロールセンターはそれ以上に下がる
   const hroll = cgS - (rcF * b + rcR * a) / c.wb;
   const KrF = kF * c.tF * c.tF / 2 + arbF, KrR = kR * c.tR * c.tR / 2 + arbR;
@@ -31,7 +37,7 @@ L.build = function (s) {
     muF, muR, msF, msR, Ms, a, b, xcg: c.rearAxle + b,
     WF: (msF + muF) * G, WR: (msR + muR) * G,
     kF, kR, cBF, cRF, cBR, cRR, arbF, arbR, kt: ty.kt * 1000, hF, hR,
-    cg, cgS, rcF, rcR, hroll, KrF, KrR,
+    cg, cgS, rcF, rcR, hroll, KrF, KrR, Kc: c.kTors * 180 / Math.PI * kcMul, kTors: c.kTors * kcMul, compF, compR, sf: 2 * msF / Ms,
     Ix: Ms * Math.pow(0.36 * c.width, 2), Iy: Ms * a * b,
     limF: Math.max(0.02, 0.085 + hF * 0.75), limR: Math.max(0.02, 0.085 + hR * 0.75),
     clF0: c.clear + hF, clR0: c.clear + hR,
@@ -114,11 +120,15 @@ L.topSpeed = function (P) {
 L.wheelLoads = function (P, ay, ae) {       // ay: 横G（+で左旋回）
   const c = P.car;
   const FzF = Math.max(0, 2 * P.WF - ae.liftF), FzR = Math.max(0, 2 * P.WR - ae.liftR);
-  const M = P.Ms * G * P.hroll, phi = M * ay / Math.max(1, P.KrF + P.KrR - M);
-  let dF = (P.KrF * phi + 2 * P.msF * G * ay * P.rcF + 2 * P.muF * G * ay * c.wheelR) / c.tF;
-  let dR = (P.KrR * phi + 2 * P.msR * G * ay * P.rcR + 2 * P.muR * G * ay * c.wheelR) / c.tR;
+  // ボディを「前後のロールをねじりばねでつないだもの」として解く（ボディが柔らかいほど前後が別々にロールする）
+  const M = P.Ms * G * P.hroll, m = M * ay / Math.max(0.3, 1 - M / (P.KrF + P.KrR));
+  const a11 = P.KrF + P.Kc, a22 = P.KrR + P.Kc, det = a11 * a22 - P.Kc * P.Kc;
+  const pF = (m * P.sf * a22 + m * (1 - P.sf) * P.Kc) / det, pR = (m * (1 - P.sf) * a11 + m * P.sf * P.Kc) / det;
+  const phi = pF * P.sf + pR * (1 - P.sf);
+  let dF = (P.KrF * pF + 2 * P.msF * G * ay * P.rcF + 2 * P.muF * G * ay * c.wheelR) / c.tF;
+  let dR = (P.KrR * pR + 2 * P.msR * G * ay * P.rcR + 2 * P.muR * G * ay * c.wheelR) / c.tR;
   dF = Math.max(-FzF / 2, Math.min(FzF / 2, dF)); dR = Math.max(-FzR / 2, Math.min(FzR / 2, dR));
-  return { loads: [FzF / 2 - dF, FzF / 2 + dF, FzR / 2 - dR, FzR / 2 + dR], roll: phi * 180 / Math.PI, dF, dR };
+  return { loads: [FzF / 2 - dF, FzF / 2 + dF, FzR / 2 - dR, FzR / 2 + dR], roll: phi * 180 / Math.PI, twist: (pF - pR) * 180 / Math.PI, dF, dR };
 };
 function tyreCap(P, Fz, cam) {
   const mu = P.tyre.mu * Math.max(0.55, 1 - 0.13 * (Fz / 3500 - 1));      // 荷重が増えるほど摩擦係数は少し下がる
@@ -126,7 +136,7 @@ function tyreCap(P, Fz, cam) {
 }
 L.cornerUse = function (P, ay, ae) {
   const s = P.s, c = P.car, w = L.wheelLoads(P, ay, ae), r = Math.abs(w.roll);
-  const outF = s.camF + r * (1 - c.camGainF), outR = s.camR + r * (1 - c.camGainR);
+  const g = Math.abs(ay), outF = s.camF + r * (1 - c.camGainF) + P.compF * g, outR = s.camR + r * (1 - c.camGainR) + P.compR * g;   // 取付部のたわみで外輪は起きる
   const inF = -s.camF + r * (1 - c.camGainF), inR = -s.camR + r * (1 - c.camGainR);
   const lo = (i, j) => Math.min(w.loads[i], w.loads[j]), hi = (i, j) => Math.max(w.loads[i], w.loads[j]);
   const capF = tyreCap(P, hi(0, 1), outF) + tyreCap(P, lo(0, 1), inF);
@@ -146,7 +156,7 @@ L.handling = function (P, v, wind) {
   const M = P.Ms * G * P.hroll;
   return {
     maxG: lo, balance, ae, outF: u.outF, outR: u.outR,
-    rollGrad: M / Math.max(1, P.KrF + P.KrR - M) * 180 / Math.PI,
+    rollGrad: L.wheelLoads(P, 1, ae).roll, twist: u.w.twist,
     rollDist: P.KrF / (P.KrF + P.KrR) * 100,
     ltDist: Math.abs(u.w.dF) / Math.max(1, Math.abs(u.w.dF) + Math.abs(u.w.dR)) * 100
   };
@@ -166,7 +176,7 @@ L.gain = function (P, front, f) {
 L.Sim = function () { this.reset(); };
 L.Sim.prototype.reset = function () {
   Object.assign(this, {
-    z: 0, vz: 0, phi: 0, vphi: 0, th: 0, vth: 0, zu: [0, 0, 0, 0], vu: [0, 0, 0, 0],
+    z: 0, vz: 0, phi: 0, phiF: 0, phiR: 0, vpF: 0, vpR: 0, twist: 0, th: 0, vth: 0, zu: [0, 0, 0, 0], vu: [0, 0, 0, 0],
     load: [0, 0, 0, 0], lp: null, travel: [0, 0, 0, 0], zr: [0, 0, 0, 0],
     X: 0, t: 0, traceT: 0, trace: [], rideMS: 0, loadMS: 0, bottom: 0
   });
@@ -183,14 +193,15 @@ L.Sim.prototype.step = function (P, dtFrame, inp) {
   const aF = P.arbF / (c.tF * c.tF), aR = P.arbR / (c.tR * c.tR);
   const F = [0, 0, 0, 0], tr = this.travel, zr = this.zr, road = P.s.road;
   if (!this.lp) this.lp = W.slice();
+  const IF = P.Ix * P.sf, IR = P.Ix * (1 - P.sf), cT = 2 * 0.15 * Math.sqrt(P.Kc * IF * IR / (IF + IR)), Mroll = P.Ms * G * P.hroll * inp.ay;
   for (let it = 0; it < n; it++) {
     this.X += inp.v * dt; this.t += dt;
     zr[0] = L.roadZ(road, this.X + c.wb, 1); zr[1] = L.roadZ(road, this.X + c.wb, -1);
     zr[2] = L.roadZ(road, this.X, 1); zr[3] = L.roadZ(road, this.X, -1);
     for (let i = 0; i < 4; i++) {
       const fr = i < 2, k = fr ? P.kF : P.kR, lim = fr ? P.limF : P.limR;
-      const t = this.z + xs[i] * this.th + ys[i] * this.phi - this.zu[i];
-      const rel = this.vz + xs[i] * this.vth + ys[i] * this.vphi - this.vu[i];
+      const t = this.z + xs[i] * this.th + ys[i] * (fr ? this.phiF : this.phiR) - this.zu[i];
+      const rel = this.vz + xs[i] * this.vth + ys[i] * (fr ? this.vpF : this.vpR) - this.vu[i];
       let f = -k * t - (rel > 0 ? (fr ? P.cRF : P.cRR) : (fr ? P.cBF : P.cBR)) * rel;
       if (t < -lim) { f += k * 12 * (-lim - t); this.bottom = 1; }       // バンプラバー
       else if (t > 0.09) f -= k * 12 * (t - 0.09);
@@ -198,11 +209,13 @@ L.Sim.prototype.step = function (P, dtFrame, inp) {
     }
     let fa = aF * (tr[0] - tr[1]); F[0] -= fa; F[1] += fa;              // スタビライザー
     fa = aR * (tr[2] - tr[3]); F[2] -= fa; F[3] += fa;
-    let sum = 0, Mphi = P.Ms * G * P.hroll * inp.ay, Mth = P.Ms * G * P.cgS * inp.ax;
-    for (let i = 0; i < 4; i++) { const f = F[i] + E[i]; sum += f; Mphi += ys[i] * f; Mth += xs[i] * f; }
+    const tq = P.Kc * (this.phiF - this.phiR) + cT * (this.vpF - this.vpR);     // ボディのねじり
+    let sum = 0, MF = Mroll * P.sf - tq, MR = Mroll * (1 - P.sf) + tq, Mth = P.Ms * G * P.cgS * inp.ax;
+    for (let i = 0; i < 4; i++) { const f = F[i] + E[i]; sum += f; if (i < 2) MF += ys[i] * f; else MR += ys[i] * f; Mth += xs[i] * f; }
     const az = sum / P.Ms;
-    this.vz += az * dt; this.vphi += Mphi / P.Ix * dt; this.vth += Mth / P.Iy * dt;
-    this.z += this.vz * dt; this.phi += this.vphi * dt; this.th += this.vth * dt;
+    this.vz += az * dt; this.vpF += MF / IF * dt; this.vpR += MR / IR * dt; this.vth += Mth / P.Iy * dt;
+    this.z += this.vz * dt; this.phiF += this.vpF * dt; this.phiR += this.vpR * dt; this.th += this.vth * dt;
+    this.phi = this.phiF * P.sf + this.phiR * (1 - P.sf); this.twist = this.phiF - this.phiR;
     let dv = 0;
     for (let i = 0; i < 4; i++) {
       const ld = Math.max(0, W[i] + P.kt * (zr[i] - this.zu[i]));        // タイヤは路面を引っ張れない
@@ -219,7 +232,7 @@ L.Sim.prototype.step = function (P, dtFrame, inp) {
       this.traceT = 0;
       this.trace.push({
         t: this.t, f: (this.z + P.a * this.th) * 1000, r: (this.z - P.b * this.th) * 1000, road: (zr[0] + zr[1]) * 500,
-        roll: this.phi * 180 / Math.PI, pitch: this.th * 180 / Math.PI, l: this.load.slice()
+        roll: this.phi * 180 / Math.PI, pitch: this.th * 180 / Math.PI, twist: this.twist * 180 / Math.PI, l: this.load.slice()
       });
       if (this.trace.length > 200) this.trace.shift();
     }

@@ -300,6 +300,38 @@ L.View = function (host, labelHost) {
       if (big) for (let i = -2; i <= 2; i++) { const fin = new T.Mesh(new T.BoxGeometry(len, 0.11, 0.015), partMat); fin.position.set(-len / 2, -0.055, i * W * 0.17); d.add(fin); }
       g.add(d);
     }
+    // ボディ補強（車体の内側にあるので「透視」で見える）
+    const barMat = new T.MeshBasicMaterial({ color: 0xe2b33c }), ra = c.rearAxle, up = new T.Vector3(0, 1, 0);
+    const tube = (p, q, r) => {
+      const a = new T.Vector3(p[0] - P.xcg, p[1], -p[2]), b = new T.Vector3(q[0] - P.xcg, q[1], -q[2]), d = b.clone().sub(a);
+      const m = new T.Mesh(new T.CylinderGeometry(r || 0.02, r || 0.02, d.length(), 8), barMat);
+      m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(up, d.normalize()); g.add(m);
+    };
+    const hTF = Tf(fa) - 0.13, hTR = Math.min(Tf(ra) - 0.14, c.belt - 0.08), hs = W / 2 - 0.3;
+    if (s.bTowerF) tube([fa, hTF, -hs], [fa, hTF, hs]);
+    if (s.bTowerR) tube([ra, hTR, -hs], [ra, hTR, hs]);
+    if (s.bLowerF) tube([fa, 0.21, -0.36], [fa, 0.21, 0.36]);
+    if (s.bLowerR) tube([ra, 0.21, -0.36], [ra, 0.21, 0.36]);
+    if (s.bFloor) { [-0.28, 0.28].forEach(y => tube([ra + 0.35, FLOOR + 0.02, y], [fa - 0.35, FLOOR + 0.02, y])); tube([(ra + fa) / 2, FLOOR + 0.02, -0.28], [(ra + fa) / 2, FLOOR + 0.02, 0.28]); }
+    if (s.bFender) [-1, 1].forEach(sd => tube([fa - 0.3, 0.42, sd * (W / 2 - 0.13)], [fa - 0.62, 0.78, sd * (W / 2 - 0.13)]));
+    if (s.cage && s.cage !== 'none') {
+      const xh = ra + c.wb * 0.42, hr = Tf(xh) - 0.13, cw = W / 2 - 0.2, r = 0.022;
+      [-1, 1].forEach(sd => {
+        tube([xh, FLOOR + 0.02, sd * cw], [xh, hr, sd * cw * 0.86], r);                      // メインフープ
+        tube([xh, hr, sd * cw * 0.86], [ra + 0.05, Math.min(hTR, 0.7), sd * cw * 0.8], r);    // 後ろへの支え
+        if (s.cage !== 'p4') {
+          tube([xh, hr, sd * cw * 0.86], [xw - 0.1, Tf(xw - 0.1) - 0.11, sd * cw * 0.84], r); // ルーフサイド
+          tube([xw - 0.1, Tf(xw - 0.1) - 0.11, sd * cw * 0.84], [xw + 0.45, FLOOR + 0.02, sd * cw], r);  // Aピラー沿い
+        }
+        if (s.cage === 'full') {
+          tube([xh, 0.42, sd * cw], [xw + 0.4, 0.5, sd * cw], r);                             // サイドバー
+          tube([xh, FLOOR + 0.05, sd * cw], [ra + 0.05, Math.min(hTR, 0.7), -sd * cw * 0.8], r);   // 斜めバー
+        }
+      });
+      tube([xh, hr, -cw * 0.86], [xh, hr, cw * 0.86], r);
+      if (s.cage !== 'p4') tube([xw - 0.1, Tf(xw - 0.1) - 0.11, -cw * 0.84], [xw - 0.1, Tf(xw - 0.1) - 0.11, cw * 0.84], r);
+      if (s.cage === 'full') tube([xh, FLOOR + 0.05, -cw], [xh, hr, cw * 0.86], r);
+    }
     wingGroup = null;
     if (s.rear === 'spoiler') { const sp = c.spoiler; g.add(box(sp.x0, sp.x1, sp.h0, sp.h1, -sp.half, sp.half, mat(c.color, { roughness: 0.32, metalness: 0.35 }))); }
     if (s.rear === 'wingS' || s.rear === 'wingL') {
@@ -355,7 +387,7 @@ L.View = function (host, labelHost) {
   };
   this.resize = function () {
     const w = host.clientWidth, h = host.clientHeight;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 1.3 ? 52 : 36; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.9 ? 52 : w / h < 1.5 ? 42 : 36; camera.updateProjectionMatrix();
   };
   const tmp = new T.Vector3();
   this.update = function (d) {
